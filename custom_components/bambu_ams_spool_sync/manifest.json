@@ -1,0 +1,11 @@
+{
+  "domain": "bambu_ams_spool_sync",
+  "name": "Bambu AMS Spool Sync",
+  "version": "0.1.0",
+  "documentation": "https://github.com/demonkazuya/bambu-ams-spool-sync",
+  "issue_tracker": "https://github.com/demonkazuya/bambu-ams-spool-sync/issues",
+  "codeowners": ["@demonkazuya"],
+  "config_flow": true,
+  "integration_type": "hub",
+  "iot_class": "local_push"
+}

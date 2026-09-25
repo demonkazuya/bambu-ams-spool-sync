@@ -1,0 +1,16 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bambu AMS Spool Sync",
+        "description": "Connect Bambu AMS trays with Spoolman.",
+        "data": {
+          "spoolman_url": "Spoolman URL"
+        },
+        "data_description": {
+          "spoolman_url": "Enter the Spoolman base URL reachable from Home Assistant, including its scheme and port."
+        }
+      }
+    }
+  }
+}
