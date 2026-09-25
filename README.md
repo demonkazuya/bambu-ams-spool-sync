@@ -1,44 +1,45 @@
 # Bambu AMS Spool Sync
 
-Home Assistant custom integration that applies the filament configuration of a spool assigned in Spoolman Sync to its mapped Bambu AMS tray.
+Home Assistant custom integration that connects your spool inventory to your printer. When you assign a spool to an AMS tray in Spoolman Sync, this integration reads the assignment and sends the matching filament profile and color to the corresponding Bambu AMS tray.
 
-## What it does
+## Required software
 
-- Watches Spoolman's `active_tray` assignment changes.
-- Looks up the newly assigned spool and processes only its mapped Bambu tray.
-- Maps the spool material and color to a Bambu filament profile.
-- Calls `bambu_lab.set_filament` only when the tray's current configuration differs.
-- Skips Bambu Lab branded filament, which the AMS can identify with RFID.
+All of the following components are needed. Spoolman and Spoolman Sync must be running services reachable on your network; Docker containers and Home Assistant add-ons are common ways to run them.
 
-An assignment change triggers the update even if Bambu Lab reports the tray as empty. The Bambu integration does not reliably expose physical insertion for every tray. The integration does not open a separate MQTT connection.
+> Installing the Home Assistant integrations alone is not enough: the **Spoolman server** and **Spoolman Sync application** must also be running. If Home Assistant runs in a separate Docker container, make sure the Spoolman URL uses a host or network address Home Assistant can reach; `localhost` inside a container usually refers to that container itself.
 
-## Requirements
+| Icon | Component | What it does |
+| --- | --- | --- |
+| 🧵 | [Spoolman](https://github.com/Donkie/Spoolman) | The filament inventory and database. It stores each spool's material, color, and other filament details. Keep the Spoolman service running. |
+| 🏷️ | [Spoolman Home Assistant integration](https://github.com/Disane87/spoolman-homeassistant) | Connects Home Assistant to Spoolman and exposes spool fields, including the `active_tray` extra field, as Home Assistant entities. This integration listens for changes to those assignment entities. |
+| 🗂️ | [Spoolman Sync](https://github.com/gibz104/SpoolmanSync) | The interface used to assign a spool to a printer's AMS tray. It writes the assignment to Spoolman's `active_tray` field. Keep Spoolman Sync running wherever you host it, such as in a Docker container or add-on. |
+| 🖨️ | [Bambu Lab Home Assistant integration](https://github.com/greghesp/ha-bambulab) | Connects Home Assistant to your Bambu printer, discovers its AMS tray entities, and provides the `bambu_lab.set_filament` action used to update a tray. |
+| 🏠 | [Home Assistant](https://www.home-assistant.io/) | Runs this integration plus the Bambu Lab and Spoolman integrations. Home Assistant must be able to reach the Spoolman service and printer integration. |
 
-- Home Assistant
-- The Bambu Lab integration, configured for the printer
-- Spoolman and Spoolman Sync, with `active_tray` assignments mapped to Bambu tray identifiers
-- Network access from Home Assistant to the configured Spoolman URL
+**Spoolman Sync and the Bambu Lab integration have different roles:** Spoolman Sync records which spool is assigned to a tray; the Bambu Lab integration provides the actual printer and AMS tray entities. Bambu AMS Spool Sync connects those two sides.
 
-This integration uses the Spoolman URL configured during setup. It does not ask for or use an API key.
+### How the update flows
+
+1. Assign a spool to an AMS tray in Spoolman Sync.
+2. Spoolman Sync stores the assignment in Spoolman's `active_tray` extra field.
+3. The Spoolman Home Assistant integration exposes the changed assignment as an entity state update.
+4. Bambu AMS Spool Sync identifies the mapped Bambu tray, reads that spool's filament data from Spoolman, and compares it with the tray's current configuration.
+5. If the configurations differ, it calls `bambu_lab.set_filament` for that tray only. Bambu Lab branded filament is skipped because the AMS can identify it using RFID.
+
+An assignment change triggers the update even if Bambu Lab reports the tray as empty. Bambu's integration does not reliably expose physical filament insertion for every tray. Editing a spool's filament details without changing its tray assignment does not currently trigger a sync. This integration does not open its own MQTT connection.
+
+This integration uses the Spoolman URL configured during setup. It does not ask for or use a Spoolman API key.
 
 ## Install with HACS
 
-Until this repository is included in the default HACS store, add it as a custom repository:
+Add this repository to HACS as a custom repository:
 
 1. In HACS, open **Integrations**.
 2. Open the menu and choose **Custom repositories**.
 3. Add `https://github.com/demonkazuya/bambu-ams-spool-sync` and select **Integration** as the category.
 4. Find **Bambu AMS Spool Sync**, install it, and restart Home Assistant.
-5. Add the integration from **Settings → Devices & services → Add integration** and enter the Spoolman URL.
-
-
-## Notes
-
-- Keep the `custom_components/bambu_ams_spool_sync/` directory structure intact.
-- A new assignment is read from Spoolman and applied to the one tray mapped by that assignment.
-- Updating a spool's filament details without changing its `active_tray` assignment does not trigger a sync.
-- Home Assistant may still log that this is a custom integration not tested by Home Assistant. HACS distributes community integrations; it does not make them part of Home Assistant Core.
+5. Add the integration from **Settings → Devices & services → Add integration** and enter the base URL of your Spoolman service. Home Assistant must be able to reach that URL.
 
 ## Issues
 
-Report problems in the GitHub repository's issue tracker.
+Report problems or request features in the [GitHub issue tracker](https://github.com/demonkazuya/bambu-ams-spool-sync/issues).
