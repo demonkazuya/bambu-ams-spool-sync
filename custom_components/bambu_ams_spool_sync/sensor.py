@@ -12,9 +12,11 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant
 from homeassistant.helpers.device_registry import (
+    EVENT_DEVICE_REGISTRY_UPDATED,
     async_get as async_get_device_registry,
 )
 from homeassistant.helpers.entity_registry import (
+    EVENT_ENTITY_REGISTRY_UPDATED,
     async_get as async_get_entity_registry,
 )
 
@@ -89,57 +91,47 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities,
 ) -> None:
-    """Discover Bambu AMS trays."""
+    """Set up the discovery sensor and assignment listener."""
 
     entity_registry = async_get_entity_registry(hass)
     device_registry = async_get_device_registry(hass)
 
-    entities = []
+    # Remove the old per-tray status entities left by earlier versions.
+    legacy_unique_id_prefix = f"{DOMAIN}_sensor."
+    for registry_entry in list(entity_registry.entities.values()):
+        if (
+            registry_entry.config_entry_id == entry.entry_id
+            and registry_entry.platform == DOMAIN
+            and registry_entry.unique_id.startswith(legacy_unique_id_prefix)
+        ):
+            entity_registry.async_remove(registry_entry.entity_id)
 
-    for entity in entity_registry.entities.values():
-
-        if entity.platform != "bambu_lab":
-            continue
-
-        entity_id = entity.entity_id
-
-        if "_ams_" not in entity_id or "_tray_" not in entity_id:
-            continue
-
-        device = None
-
-        if entity.device_id:
-            device = device_registry.async_get(entity.device_id)
-
-        ams_index = BambuAMSTraySensor._get_ams_index(device)
-        tray_index = BambuAMSTraySensor._get_tray_number_from_entity_id(
-            entity_id
-        )
-
-        if ams_index is None or tray_index is None:
-            _LOGGER.warning(
-                "Skipping Bambu tray %s: unable to determine its AMS/tray indices",
-                entity_id,
-            )
-            continue
-
-        entities.append(
-            BambuAMSTraySensor(
-                hass=hass,
-                entry=entry,
-                entity_id=entity_id,
-                device=device,
-                ams_index=ams_index,
-                tray_index=tray_index,
-            )
-        )
-
-    _LOGGER.info(
-        "Bambu AMS Spool Sync discovered %d AMS tray entities",
-        len(entities),
+    targets = _discover_bambu_trays(
+        hass,
+        entry,
+        entity_registry,
+        device_registry,
+    )
+    discovery_sensor = BambuAmsSpoolSyncDiscoverySensor(
+        entry,
+        entity_registry,
+        device_registry,
+        targets,
     )
 
-    async_add_entities(entities)
+    _LOGGER.info(
+        "Bambu AMS Spool Sync discovered %d Bambu AMS tray entities",
+        len(targets),
+    )
+
+    async_add_entities([discovery_sensor])
+
+    runtime = {
+        "targets": targets,
+        "discovery_sensor": discovery_sensor,
+        "unsubs": [],
+    }
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = runtime
 
     async def _handle_assignment_state_change(event: Event) -> None:
         """Handle Spoolman assignment changes for one AMS tray."""
@@ -184,25 +176,110 @@ async def async_setup_entry(
         if tray_id == old_value:
             return
 
-        target = _find_bambu_tray(hass, entry, tray_id, entity_registry, device_registry)
-        if target is None:
+        matching_target = _find_bambu_tray(
+            hass,
+            entry,
+            tray_id,
+            entity_registry,
+            device_registry,
+        )
+        if matching_target is None:
             _LOGGER.warning("No Bambu AMS tray matches Spoolman assignment %s", tray_id)
             return
         target = runtime.setdefault("targets", {}).setdefault(
-            target._bambu_entity_id, target
+            matching_target._bambu_entity_id,
+            matching_target,
         )
 
         await target._async_process_assignment(tray_id, spool_id)
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
-        "unsub": hass.bus.async_listen(
-            "state_changed", _handle_assignment_state_change
-        ),
-        "targets": {entity._bambu_entity_id: entity for entity in entities},
-    }
+    def _refresh_discovered_trays(event: Event) -> None:
+        """Refresh the dynamic printer/AMS/tray inventory."""
+        current_runtime = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+        if current_runtime is None:
+            return
+
+        current_targets = _discover_bambu_trays(
+            hass,
+            entry,
+            entity_registry,
+            device_registry,
+            current_runtime.get("targets", {}),
+        )
+        current_runtime["targets"] = current_targets
+        current_runtime["discovery_sensor"].update_targets(current_targets)
+
+    runtime["unsubs"].extend(
+        [
+            hass.bus.async_listen(
+                "state_changed",
+                _handle_assignment_state_change,
+            ),
+            hass.bus.async_listen(
+                EVENT_ENTITY_REGISTRY_UPDATED,
+                _refresh_discovered_trays,
+            ),
+            hass.bus.async_listen(
+                EVENT_DEVICE_REGISTRY_UPDATED,
+                _refresh_discovered_trays,
+            ),
+        ]
+    )
 
     # Assignment events synchronize only the newly assigned Spoolman tray.
     # Bambu's reported empty state does not block sending the assigned profile.
+
+
+def _discover_bambu_trays(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    entity_registry,
+    device_registry,
+    previous: dict[str, BambuAMSTrayController] | None = None,
+) -> dict[str, BambuAMSTrayController]:
+    """Discover registered Bambu AMS tray sensors and retain command guards."""
+    targets = {}
+    previous = previous or {}
+
+    for registry_entry in entity_registry.entities.values():
+        entity_id = registry_entry.entity_id
+        if (
+            registry_entry.platform != "bambu_lab"
+            or not entity_id.startswith("sensor.")
+            or "_ams_" not in entity_id
+            or "_tray_" not in entity_id
+        ):
+            continue
+
+        device = (
+            device_registry.async_get(registry_entry.device_id)
+            if registry_entry.device_id
+            else None
+        )
+        ams_index = BambuAMSTrayController._get_ams_index(device)
+        tray_index = BambuAMSTrayController._get_tray_number_from_entity_id(
+            entity_id
+        )
+        if ams_index is None or tray_index is None:
+            continue
+
+        target = previous.get(entity_id)
+        if target is None or target._device_id != registry_entry.device_id:
+            target = BambuAMSTrayController(
+                hass=hass,
+                entry=entry,
+                entity_id=entity_id,
+                device=device,
+                ams_index=ams_index,
+                tray_index=tray_index,
+            )
+        else:
+            target._device = device
+            target._ams_index = ams_index
+            target._tray_index = tray_index
+        targets[entity_id] = target
+
+    return targets
 
 
 def _find_bambu_tray(
@@ -211,7 +288,7 @@ def _find_bambu_tray(
     spoolman_tray_id: str,
     entity_registry,
     device_registry,
-) -> BambuAMSTraySensor | None:
+) -> BambuAMSTrayController | None:
     """Resolve an assignment to the corresponding currently registered Bambu tray."""
     for registry_entry in entity_registry.entities.values():
         if registry_entry.platform != "bambu_lab":
@@ -220,11 +297,18 @@ def _find_bambu_tray(
         if not entity_id.startswith("sensor.") or "_ams_" not in entity_id or "_tray_" not in entity_id:
             continue
         device = device_registry.async_get(registry_entry.device_id) if registry_entry.device_id else None
-        ams_index = BambuAMSTraySensor._get_ams_index(device)
-        tray_index = BambuAMSTraySensor._get_tray_number_from_entity_id(entity_id)
+        ams_index = BambuAMSTrayController._get_ams_index(device)
+        tray_index = BambuAMSTrayController._get_tray_number_from_entity_id(entity_id)
         if ams_index is None or tray_index is None:
             continue
-        candidate = BambuAMSTraySensor(hass, entry, entity_id, device, ams_index, tray_index)
+        candidate = BambuAMSTrayController(
+            hass,
+            entry,
+            entity_id,
+            device,
+            ams_index,
+            tray_index,
+        )
         expected_suffix = candidate._get_spoolman_tray_id()
         if expected_suffix and spoolman_tray_id.casefold().endswith(expected_suffix.casefold()):
             return candidate
@@ -232,13 +316,158 @@ def _find_bambu_tray(
 
 
 # ============================================================
-# AMS SENSOR
+# DISCOVERY SENSOR AND TRAY CONTROLLERS
 # ============================================================
 
-class BambuAMSTraySensor(SensorEntity):
-    """Represent a Bambu AMS tray."""
+class BambuAmsSpoolSyncDiscoverySensor(SensorEntity):
+    """Summarize the Bambu printers, AMS units, and trays discovered by the integration."""
 
     _attr_should_poll = False
+    _attr_name = "Bambu AMS Spool Sync Detected Trays"
+    _attr_icon = "mdi:printer-3d"
+    _attr_native_unit_of_measurement = "trays"
+
+    def __init__(self, entry, entity_registry, device_registry, targets) -> None:
+        """Initialize the discovery summary sensor."""
+        self._entity_registry = entity_registry
+        self._device_registry = device_registry
+        self._targets = targets
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_discovery_summary"
+        self._attr_native_value = 0
+        self._attr_extra_state_attributes = {}
+        self.update_targets(targets, write_state=False)
+
+    def update_targets(
+        self,
+        targets: dict[str, BambuAMSTrayController],
+        *,
+        write_state: bool = True,
+    ) -> None:
+        """Update counts and printer/AMS details from registered Bambu trays."""
+        self._targets = targets
+        printers: dict[str, dict[str, Any]] = {}
+
+        # Include Bambu printers even if no AMS tray sensors are registered yet.
+        for registry_entry in self._entity_registry.entities.values():
+            if registry_entry.platform != "bambu_lab" or not registry_entry.device_id:
+                continue
+            device = self._device_registry.async_get(registry_entry.device_id)
+            if device is None:
+                continue
+            device_name = getattr(device, "name", "") or ""
+            printer_device = (
+                BambuAMSTrayController._get_parent_bambu_device(
+                    self._device_registry,
+                    device,
+                )
+                if "_AMS_" in device_name
+                else device
+            )
+            if (
+                printer_device is None
+                or not BambuAMSTrayController._get_bambu_identifier(printer_device)
+            ):
+                continue
+            printer_key = printer_device.id
+            printers.setdefault(
+                printer_key,
+                {
+                    "name": (
+                        getattr(printer_device, "name_by_user", None)
+                        or getattr(printer_device, "name", None)
+                        or "Unknown printer"
+                    ),
+                    "device_id": printer_device.id,
+                    "ams_units": {},
+                },
+            )
+            if "_AMS_" in device_name:
+                ams_index = BambuAMSTrayController._get_ams_index(device)
+                ams_key = device.id
+                printers[printer_key]["ams_units"].setdefault(
+                    ams_key,
+                    {
+                        "name": (
+                            getattr(device, "name_by_user", None)
+                            or device_name
+                            or "Unknown AMS"
+                        ),
+                        "ams_index": ams_index if ams_index is not None else -1,
+                        "tray_entities": [],
+                    },
+                )
+
+        for target in targets.values():
+            ams_device = target._device
+            printer_device = BambuAMSTrayController._get_parent_bambu_device(
+                self._device_registry,
+                ams_device,
+            )
+            printer_device = printer_device or ams_device
+            printer_key = (
+                getattr(printer_device, "id", None)
+                or target._bambu_entity_id
+            )
+            printer_name = (
+                getattr(printer_device, "name_by_user", None)
+                or getattr(printer_device, "name", None)
+                or "Unknown printer"
+            )
+            ams_key = getattr(ams_device, "id", None) or target._bambu_entity_id
+            ams_name = (
+                getattr(ams_device, "name_by_user", None)
+                or getattr(ams_device, "name", None)
+                or "Unknown AMS"
+            )
+
+            printer = printers.setdefault(
+                printer_key,
+                {
+                    "name": printer_name,
+                    "device_id": getattr(printer_device, "id", None),
+                    "ams_units": {},
+                },
+            )
+            ams_unit = printer["ams_units"].setdefault(
+                ams_key,
+                {
+                    "name": ams_name,
+                    "ams_index": target._ams_index,
+                    "tray_entities": [],
+                },
+            )
+            ams_unit["tray_entities"].append(target._bambu_entity_id)
+
+        printer_list = []
+        ams_count = 0
+        for printer in printers.values():
+            ams_units = []
+            for ams_unit in printer["ams_units"].values():
+                ams_unit["tray_entities"].sort()
+                ams_unit["tray_count"] = len(ams_unit["tray_entities"])
+                ams_units.append(ams_unit)
+            ams_units.sort(key=lambda item: (item["ams_index"], item["name"]))
+            printer["ams_units"] = ams_units
+            printer["ams_count"] = len(ams_units)
+            printer_list.append(printer)
+            ams_count += len(ams_units)
+
+        printer_list.sort(key=lambda item: item["name"].casefold())
+        tray_count = len(targets)
+        self._attr_native_value = tray_count
+        self._attr_extra_state_attributes = {
+            "printer_count": len(printer_list),
+            "ams_count": ams_count,
+            "tray_count": tray_count,
+            "printers": printer_list,
+        }
+
+        if write_state and self.hass and self.entity_id:
+            self.async_write_ha_state()
+
+
+class BambuAMSTrayController:
+    """Hold mapping and command state for one dynamically discovered Bambu tray."""
 
     def __init__(
         self,
@@ -249,67 +478,21 @@ class BambuAMSTraySensor(SensorEntity):
         ams_index: int,
         tray_index: int,
     ) -> None:
-        """Initialize the AMS tray sensor."""
+        """Initialize the tray command controller."""
 
         self.hass = hass
         self.entry = entry
 
         self._bambu_entity_id = entity_id
         self._device = device
+        self._device_id = getattr(device, "id", None)
         self._ams_index = ams_index
         self._tray_index = tray_index
 
         self._spool = None
-        self._spoolman_tray = None
-
         # Prevent sending the exact same filament repeatedly.
         self._last_set_filament = None
 
-        self._attr_unique_id = f"{DOMAIN}_{entity_id}"
-
-        tray_number = self._get_tray_number()
-
-        printer_name = None
-        ams_name = None
-
-        if device:
-            ams_name = getattr(device, "name", None)
-
-        if ams_name and "_AMS_" in ams_name:
-            printer_name = ams_name.split(
-                "_AMS_",
-                1,
-            )[0]
-
-        if printer_name and tray_number:
-            self._attr_name = (
-                f"{printer_name} AMS 1 Tray {tray_number}"
-            )
-        elif tray_number:
-            self._attr_name = f"AMS Tray {tray_number}"
-        else:
-            self._attr_name = entity_id
-
-        self._attr_native_value = "unassigned"
-
-        if device:
-            self._attr_device_info = {
-                "identifiers": {
-                    (
-                        DOMAIN,
-                        device.id,
-                    )
-                },
-                "name": device.name,
-            }
-
-    # ========================================================
-    # UPDATE
-    # ========================================================
-
-    async def async_added_to_hass(self) -> None:
-        """Set up the entity; assignments are handled by the platform listener."""
-        await super().async_added_to_hass()
 
     async def _async_process_assignment(
         self,
@@ -330,8 +513,6 @@ class BambuAMSTraySensor(SensorEntity):
 
         try:
 
-            self._spoolman_tray = tray_id
-
             self._spool = await self.hass.async_add_executor_job(
                 self._get_spool,
                 spoolman_url,
@@ -345,43 +526,19 @@ class BambuAMSTraySensor(SensorEntity):
             ).strip().strip('"')
             if not self._spool or current_assignment != tray_id:
                 self._spool = None
-                self._attr_native_value = "unassigned"
-                if self.entity_id:
-                    self.async_write_ha_state()
                 return
 
-            if self._spool:
+            _LOGGER.info(
+                "AMS tray %s -> Spoolman tray %s -> spool %s",
+                self._bambu_entity_id,
+                tray_id,
+                self._spool.get("id"),
+            )
 
-                filament = (
-                    self._spool.get("filament")
-                    or {}
-                )
-
-                self._attr_native_value = filament.get(
-                    "name",
-                    "assigned",
-                )
-
-                _LOGGER.info(
-                    "AMS tray %s -> Spoolman tray %s -> spool %s",
-                    self._bambu_entity_id,
-                    tray_id,
-                    self._spool.get("id"),
-                )
-
-                # The Spoolman assignment is the desired tray configuration.
-                # Send it even when Bambu reports the physical slot as empty;
-                # some AMS slots do not report insertion reliably until later.
-                await self._async_set_bambu_filament()
-
-            else:
-
-                self._attr_native_value = "unassigned"
-
-                _LOGGER.debug(
-                    "No Spoolman spool assigned to %s",
-                    tray_id,
-                )
+            # The Spoolman assignment is the desired tray configuration.
+            # Send it even when Bambu reports the physical slot as empty;
+            # some AMS slots do not report insertion reliably until later.
+            await self._async_set_bambu_filament()
 
         except Exception as err:
 
@@ -390,9 +547,6 @@ class BambuAMSTraySensor(SensorEntity):
                 self._bambu_entity_id,
                 err,
             )
-
-        if self.entity_id:
-            self.async_write_ha_state()
 
     # ========================================================
     # SET BAMBU FILAMENT
@@ -719,10 +873,8 @@ class BambuAMSTraySensor(SensorEntity):
 
             if parent:
 
-                identifier = (
-                    BambuAMSTraySensor._get_bambu_identifier(
-                        parent
-                    )
+                identifier = BambuAMSTrayController._get_bambu_identifier(
+                    parent
                 )
 
                 if identifier:
@@ -756,27 +908,14 @@ class BambuAMSTraySensor(SensorEntity):
                     == printer_name
                 ):
 
-                    identifier = (
-                        BambuAMSTraySensor._get_bambu_identifier(
-                            candidate
-                        )
+                    identifier = BambuAMSTrayController._get_bambu_identifier(
+                        candidate
                     )
 
                     if identifier:
                         return candidate
 
         return None
-
-    @staticmethod
-    def _get_printer_device(device_registry, device):
-        """Return a Bambu printer device, resolving an AMS device to its parent."""
-        if not device:
-            return None
-        if BambuAMSTraySensor._get_bambu_identifier(device):
-            return device
-        return BambuAMSTraySensor._get_parent_bambu_device(
-            device_registry, device
-        )
 
     # ========================================================
     # TRAY NUMBER
@@ -962,59 +1101,3 @@ class BambuAMSTraySensor(SensorEntity):
         )
 
         return tray_id
-
-    # ========================================================
-    # ATTRIBUTES
-    # ========================================================
-
-    @property
-    def extra_state_attributes(
-        self,
-    ):
-        """Return AMS tray and Spoolman information."""
-
-        attributes = {
-            "bambu_entity_id": (
-                self._bambu_entity_id
-            ),
-            "spoolman_tray": (
-                self._spoolman_tray
-            ),
-        }
-
-        if self._spool:
-
-            filament = (
-                self._spool.get("filament")
-                or {}
-            )
-
-            attributes.update(
-                {
-                    "spool_id": (
-                        self._spool.get("id")
-                    ),
-                    "filament": (
-                        filament.get("name")
-                    ),
-                    "material": (
-                        filament.get("material")
-                    ),
-                    "vendor": (
-                        filament.get("vendor")
-                        or {}
-                    ).get(
-                        "name"
-                    ),
-                    "color": (
-                        filament.get(
-                            "color_hex"
-                        )
-                        or filament.get(
-                            "color"
-                        )
-                    ),
-                }
-            )
-
-        return attributes

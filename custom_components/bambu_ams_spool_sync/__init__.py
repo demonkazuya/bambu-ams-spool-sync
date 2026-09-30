@@ -32,8 +32,11 @@ async def async_unload_entry(
     """Unload a Bambu AMS Spool Sync config entry."""
 
     runtime = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
-    if runtime and runtime.get("unsub"):
-        runtime["unsub"]()
+    if runtime:
+        for unsubscribe in runtime.get("unsubs", []):
+            unsubscribe()
+        if runtime.get("unsub"):
+            runtime["unsub"]()
 
     return await hass.config_entries.async_unload_platforms(
         entry,

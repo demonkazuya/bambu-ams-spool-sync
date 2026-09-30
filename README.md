@@ -28,6 +28,10 @@ All of the following components are needed. Spoolman and Spoolman Sync must be r
 
 An assignment change triggers the update even if Bambu Lab reports the tray as empty. Bambu's integration does not reliably expose physical filament insertion for every tray. Editing a spool's filament details without changing its tray assignment does not currently trigger a sync. This integration does not open its own MQTT connection.
 
+## Discovery sensor
+
+The integration creates one **Bambu AMS Spool Sync Detected Trays** sensor for troubleshooting. Its state is the number of Bambu AMS tray sensors currently discovered. Its attributes list the detected printers, AMS units, and tray entity IDs. The summary refreshes when Home Assistant's Bambu entity or device registry changes; it does not poll the printer. It reports discovery only, not whether a physical spool is loaded or assigned.
+
 This integration uses the Spoolman URL configured during setup. It does not ask for or use a Spoolman API key.
 
 ## Install with HACS
