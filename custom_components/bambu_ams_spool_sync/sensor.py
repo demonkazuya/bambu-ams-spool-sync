@@ -194,6 +194,10 @@ async def async_setup_entry(
         await target._async_process_assignment(tray_id, spool_id)
 
     def _refresh_discovered_trays(event: Event) -> None:
+        """Schedule a registry refresh on Home Assistant's event loop."""
+        hass.add_job(_async_refresh_discovered_trays)
+
+    def _async_refresh_discovered_trays() -> None:
         """Refresh the dynamic printer/AMS/tray inventory."""
         current_runtime = hass.data.get(DOMAIN, {}).get(entry.entry_id)
         if current_runtime is None:
