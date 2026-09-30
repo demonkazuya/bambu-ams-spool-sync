@@ -10,7 +10,7 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.device_registry import (
     EVENT_DEVICE_REGISTRY_UPDATED,
     async_get as async_get_device_registry,
@@ -197,6 +197,7 @@ async def async_setup_entry(
         """Schedule a registry refresh on Home Assistant's event loop."""
         hass.add_job(_async_refresh_discovered_trays)
 
+    @callback
     def _async_refresh_discovered_trays() -> None:
         """Refresh the dynamic printer/AMS/tray inventory."""
         current_runtime = hass.data.get(DOMAIN, {}).get(entry.entry_id)

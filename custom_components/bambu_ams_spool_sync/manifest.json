@@ -1,7 +1,7 @@
 {
   "domain": "bambu_ams_spool_sync",
   "name": "Bambu AMS Spool Sync",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "documentation": "https://github.com/demonkazuya/bambu-ams-spool-sync",
   "issue_tracker": "https://github.com/demonkazuya/bambu-ams-spool-sync/issues",
   "codeowners": ["@demonkazuya"],
