@@ -11,6 +11,14 @@
           "spoolman_url": "Enter the Spoolman base URL reachable from Home Assistant, including its scheme and port."
         }
       }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Spoolman. Check the URL and that the Spoolman service is running.",
+      "invalid_response": "The URL did not respond as a Spoolman server. Check the URL and try again.",
+      "timeout": "Timed out while contacting Spoolman. Check the URL and that the Spoolman service is running."
+    },
+    "abort": {
+      "already_configured": "This Spoolman URL is already configured."
     }
   }
 }
