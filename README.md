@@ -2,6 +2,8 @@
 
 Home Assistant custom integration that connects your spool inventory to your printer. When you assign a spool to an AMS tray in Spoolman Sync, this integration reads the assignment and sends the matching filament profile and color to the corresponding Bambu AMS tray.
 
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=demonkazuya&repository=bambu-ams-spool-sync&category=Integration)
+
 ## Required software
 
 All of the following components are needed. Spoolman and Spoolman Sync must be running services reachable on your network; Docker containers and Home Assistant add-ons are common ways to run them.
@@ -36,13 +38,13 @@ This integration uses the Spoolman URL configured during setup. It does not ask 
 
 ## Install with HACS
 
-Add this repository to HACS as a custom repository:
+This integration is part of the default HACS catalog, so it installs without adding a custom repository.
 
-1. In HACS, open **Integrations**.
-2. Open the menu and choose **Custom repositories**.
-3. Add `https://github.com/demonkazuya/bambu-ams-spool-sync` and select **Integration** as the category.
-4. Find **Bambu AMS Spool Sync**, install it, and restart Home Assistant.
-5. Add the integration from **Settings → Devices & services → Add integration** and enter the base URL of your Spoolman service. Home Assistant must be able to reach that URL.
+1. Click the button above, or open HACS in Home Assistant and go to **Integrations**.
+2. Find **Bambu AMS Spool Sync**, install it, and restart Home Assistant.
+3. Add the integration from **Settings → Devices & services → Add integration** and enter the base URL of your Spoolman service. Home Assistant must be able to reach that URL. The URL is checked when you submit it, and the config flow reports the reason if it cannot be reached.
+
+If you prefer to add the repository yourself, open the menu in HACS and choose **Custom repositories**, add `https://github.com/demonkazuya/bambu-ams-spool-sync`, and select **Integration** as the category.
 
 ## Issues
 
