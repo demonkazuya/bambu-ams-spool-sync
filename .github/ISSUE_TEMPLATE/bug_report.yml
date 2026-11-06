@@ -1,0 +1,202 @@
+name: "🐛 Bug Report"
+description: Report a bug or issue with Bambu AMS Spool Sync
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please fill out the form below as completely as possible so we can reproduce and fix it quickly.
+
+        **Before you submit:** make sure Spoolman, Spoolman Sync, and the Bambu Lab integration are all running and reachable from Home Assistant. See the [README](https://github.com/demonkazuya/bambu-ams-spool-sync#required-software) for the full list of required components.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description of the Issue
+      description: A clear and concise description of what the problem is.
+      placeholder: "Explain what is happening..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_vs_actual
+    attributes:
+      label: Expected vs Actual Behavior
+      description: What did you expect to happen, and what happened instead?
+      placeholder: "Expected: ...\nActual: ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps_to_reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions on how to replicate the issue.
+      placeholder: |
+        1. Open Spoolman Sync and assign a spool to an AMS tray
+        2. ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_were_you_doing
+    attributes:
+      label: What were you trying to do when this happened?
+      description: For example, setting up the integration for the first time, assigning a spool in Spoolman Sync, or changing a spool's details.
+      placeholder: "e.g., I assigned a spool to tray 2 in Spoolman Sync and the tray did not update..."
+    validations:
+      required: false
+
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant Version
+      description: "Version of Home Assistant (Settings → System → Repairs → ... → About, or Developer Tools → Info)."
+      placeholder: "e.g., 2026.10.2"
+    validations:
+      required: true
+
+  - type: input
+    id: integration_version
+    attributes:
+      label: Bambu AMS Spool Sync Version
+      description: Version of this integration installed in Home Assistant.
+      placeholder: "e.g., v0.2.6"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: Install Method
+      description: How did you install Bambu AMS Spool Sync?
+      options:
+        - "HACS (default catalog)"
+        - "HACS (custom repository)"
+        - "Manual copy into custom_components"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: bambu_lab_integration
+    attributes:
+      label: Bambu Lab Home Assistant Integration
+      description: Which integration provides your Bambu printer and AMS tray entities?
+      options:
+        - "greghesp/ha-bambulab (HACS)"
+        - "Official Home Assistant Bambu Lab integration (core)"
+        - "Not installed"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: spoolman_integration
+    attributes:
+      label: Spoolman Home Assistant Integration
+      description: Which integration exposes Spoolman spools (including the active_tray assignment) to Home Assistant?
+      options:
+        - "Disane87/spoolman-homeassistant (HACS)"
+        - "Other Spoolman Home Assistant integration"
+        - "Not installed"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: input
+    id: spoolman_version
+    attributes:
+      label: Spoolman Server Version
+      description: "Version of the Spoolman service (shown in the Spoolman UI, or the version in your Spoolman container/add-on)."
+      placeholder: "e.g., v0.17.0"
+    validations:
+      required: true
+
+  - type: input
+    id: spoolman_sync_version
+    attributes:
+      label: Spoolman Sync Version
+      description: Version of the Spoolman Sync app used to assign spools to AMS trays.
+      placeholder: "e.g., v0.3.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: printer_model
+    attributes:
+      label: Bambu Lab Printer Model
+      description: Which Bambu Lab printer is connected?
+      options:
+        - "P1S"
+        - "P1P"
+        - "X1-Carbon (X1C)"
+        - "A1"
+        - "A1 Mini"
+        - "Multiple printers"
+        - "Other"
+        - "None / setup stage"
+    validations:
+      required: true
+
+  - type: input
+    id: spoolman_url
+    attributes:
+      label: Spoolman URL (as entered in the config flow)
+      description: The Spoolman base URL you entered when adding the integration. This integration does not use a Spoolman API key, so there is nothing secret to redact here. Redact private IPs if you prefer.
+      placeholder: "e.g., http://192.168.1.20:7912"
+    validations:
+      required: true
+
+  - type: textarea
+    id: ha_log
+    attributes:
+      label: Home Assistant Log Excerpt
+      description: |
+        Paste log lines mentioning `bambu_ams_spool_sync` (Settings → System → Logs, or the `homeassistant.log` file). Redact anything private (IPs, tokens, serial numbers).
+      render: shell
+      placeholder: |
+        2026-11-06 12:34:56.789 WARNING (MainThread) [homeassistant.loader] We found a custom integration bambu_ams_spool_sync which has not been tested by Home Assistant...
+    validations:
+      required: false
+
+  - type: textarea
+    id: discovery_sensor
+    attributes:
+      label: Discovery Sensor State and Attributes
+      description: |
+        The integration creates one troubleshooting sensor, `sensor.bambu_ams_spool_sync_detected_trays`. Paste its state and attributes (Developer Tools → States, search for `bambu_ams_spool_sync`). This shows which printers, AMS units, and trays were discovered.
+      render: shell
+      placeholder: |
+        state: 8
+        attributes:
+          printer_count: 1
+          printers:
+            - name: ...
+              ams_count: 2
+              ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots / Photos
+      description: Drag and drop screenshots of the config flow, Home Assistant entities, Spoolman Sync, or the tray state.
+      placeholder: "Attach images here..."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-Submission Checklist
+      options:
+        - label: "Spoolman, Spoolman Sync, and the Bambu Lab integration are running and reachable from Home Assistant."
+          required: false
+        - label: "The Spoolman URL responds from Home Assistant (for example, http://<spoolman>/api/v1/health returns {\"status\":\"healthy\"})."
+          required: false
+        - label: "I checked existing GitHub issues to make sure this is not a duplicate."
+          required: true

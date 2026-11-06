@@ -1,0 +1,55 @@
+name: "❓ Support / Question"
+description: Ask for help getting Bambu AMS Spool Sync set up or working
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for asking! Please check the [README](https://github.com/demonkazuya/bambu-ams-spool-sync#required-software) first — especially the list of required components (Spoolman, Spoolman Sync, the Spoolman Home Assistant integration, and the Bambu Lab integration) and the install steps. Many setup questions are answered there.
+
+  - type: textarea
+    id: what_trying_to_do
+    attributes:
+      label: What are you trying to do?
+      description: Describe what you are setting up or trying to achieve.
+      placeholder: "e.g., I want assigned spools in Spoolman Sync to update the matching AMS tray..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_tried
+    attributes:
+      label: What have you tried so far?
+      description: Steps you've already taken, and what happened.
+      placeholder: "e.g., Installed via HACS, added the integration with my Spoolman URL, bambu_lab entities are showing..."
+    validations:
+      required: false
+
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant Version
+      placeholder: "e.g., 2026.10.2"
+    validations:
+      required: false
+
+  - type: input
+    id: integration_version
+    attributes:
+      label: Bambu AMS Spool Sync Version
+      placeholder: "e.g., v0.2.6"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: Install Method
+      options:
+        - "HACS (default catalog)"
+        - "HACS (custom repository)"
+        - "Manual copy into custom_components"
+        - "Not sure"
+    validations:
+      required: false

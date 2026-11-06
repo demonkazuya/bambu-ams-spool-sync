@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "Bambu AMS Spool Sync Releases"
+    url: "https://github.com/demonkazuya/bambu-ams-spool-sync/releases"
+    about: "Download the latest release and check the release notes"
+  - name: "Installation & setup guide"
+    url: "https://github.com/demonkazuya/bambu-ams-spool-sync#install-with-hacs"
+    about: "Setup steps, required components, and troubleshooting notes from the README"
