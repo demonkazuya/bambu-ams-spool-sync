@@ -9,7 +9,7 @@ import aiohttp
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
@@ -27,7 +27,11 @@ def _build_schema() -> vol.Schema:
         {
             vol.Required(
                 CONF_SPOOLMAN_URL,
-            ): cv.url,
+            ): selector.TextSelector(
+                selector.TextSelectorConfig(
+                    type=selector.TextSelectorType.URL,
+                )
+            ),
         }
     )
 
