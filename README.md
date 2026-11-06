@@ -46,6 +46,14 @@ This integration is part of the default HACS catalog, so it installs without add
 
 If you prefer to add the repository yourself, open the menu in HACS and choose **Custom repositories**, add `https://github.com/demonkazuya/bambu-ams-spool-sync`, and select **Integration** as the category.
 
+## ☕ Support the Project
+
+If this integration saved you from mid-print filament panics, AMS color mismatches, or manual Spoolman entry headaches, thank you for supporting the project!
+
+If you're happy and feeling generous, you can tip me a coffee. Every bit helps sponsor more test filament and keeps the AMS gears turning smoothly:
+
+[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Tip%20a%20Coffee-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/demonkazuya)
+
 ## Issues
 
 Report problems or request features in the [GitHub issue tracker](https://github.com/demonkazuya/bambu-ams-spool-sync/issues).
